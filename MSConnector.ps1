@@ -1,5 +1,5 @@
 function Connect-TenantAdmin {
-    param ([Parameter(Mandatory = $true)][psobject]$Config)
+    param ([psobject]$Config = $null)
 
     if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
         Install-Module -Name ExchangeOnlineManagement -Force -AllowClobber -Scope CurrentUser
@@ -7,7 +7,15 @@ function Connect-TenantAdmin {
 
     Import-Module ExchangeOnlineManagement
 
-    Connect-ExchangeOnline -UserPrincipalName $Config.TenantAdmin.Username
+    if ($Config -ne $null) {
+        $TenantAdminUsername = $Config.TenantAdmin.Username
+        $TenantAdminPassword = $Config.TenantAdmin.Password | ConvertTo-SecureString -AsPlainText -Force
+        $Credential = New-Object System.Management.Automation.PSCredential($TenantAdminUsername, $TenantAdminPassword)
+        Connect-ExchangeOnline -Credential $Credential
+    }
+    else {
+        Connect-ExchangeOnline
+    }
 
     $adminRole = Get-RoleGroup | Where-Object { $_.Name -eq "Organization Management" }
 
@@ -17,10 +25,15 @@ function Connect-TenantAdmin {
     }
 }
 
-
 function Connect-ExchangeOnline {
-    param ([Parameter(Mandatory = $true)][pscredential]$Credential)
+    param ([pscredential]$Credential = $null)
 
     Import-Module ExchangeOnlineManagement
-    Connect-ExchangeOnline -Credential $Credential
+
+    if ($Credential -ne $null) {
+        Connect-ExchangeOnline -Credential $Credential
+    }
+    else {
+        Connect-ExchangeOnline
+    }
 }
