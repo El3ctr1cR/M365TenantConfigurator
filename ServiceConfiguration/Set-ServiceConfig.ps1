@@ -25,13 +25,35 @@ function Set-ServiceConfig {
 
     $Config = ConvertFrom-Yaml (Get-Content -Raw -Path $ConfigPath)
 
-    $adminRoles = @("Organization Management", "Exchange Admins")
+    $adminRoles = @("Organization Management", "Global Administrator")
     $adminUsers = @()
+
     foreach ($role in $adminRoles) {
-        $roleMembers = Get-RoleGroupMember -Identity $role
-        $adminUsers += $roleMembers | Select-Object -ExpandProperty UserPrincipalName
+        try {
+            $roleMembers = Get-RoleGroupMember -Identity $role
+            $adminUsers += $roleMembers | Select-Object -ExpandProperty PrimarySmtpAddress
+        }
+        catch [Microsoft.Exchange.Configuration.Tasks.ManagementObjectNotFoundException] {
+            Log-Message "Role group '$role' not found. Skipping..." "WARNING"
+        }
+        catch {
+            Log-Message "An error occurred while retrieving members for role '$role': $_" "ERROR"
+        }
     }
+
     $adminUsers = $adminUsers | Sort-Object -Unique
+
+    # Log the admin users
+    if ($adminUsers.Count -gt 0) {
+        Log-Message "Logging the list of admin users retrieved..." "INFO"
+        foreach ($adminUser in $adminUsers) {
+            Log-Message "Admin User: $adminUser" "INFO"
+        }
+    }
+    else {
+        Log-Message "No admin users were found." "ERROR"
+    }
+
 
     $tasks = @(
         @{ Name = "Enable Organization Customization"; Action = { 
@@ -39,7 +61,8 @@ function Set-ServiceConfig {
                 if ($orgCustomization.IsMultiGeoConfigurationEnabled -eq $false) {
                     Enable-OrganizationCustomization
                     Log-Message "Organization Customization enabled successfully." "SUCCESS"
-                } else {
+                }
+                else {
                     Log-Message "Organization Customization is already enabled." "INFO"
                 }
             } 
@@ -116,18 +139,17 @@ function Set-ServiceConfig {
                 Set-OwaMailboxPolicy -Identity 'OwaMailboxPolicy-Default' -ConditionalAccessPolicy $Config.Exchange.ConditionalAccessPolicy 
             } 
         },
-        @{ Name   = "Set Retention Limit on Deleted Items"; Action = { 
+        @{ Name = "Set Retention Limit on Deleted Items"; Action = { 
                 $retentionDays = $Config.Exchange.RetentionLimitDeletedItems
-                $retentionDaysString = $Config.Exchange.RetentionLimitDeletedItems.ToString
-                if (-not (Get-RetentionPolicyTag -Name "Deleted Items $retentionDaysString Days" -ErrorAction SilentlyContinue)) {
-                    New-RetentionPolicyTag -Name "Deleted Items $retentionDaysString Days" -RetentionAction PermanentlyDelete -AgeLimitForRetention $retentionDays -Type DeletedItems
-                    Log-Message "Retention policy tag 'Deleted Items $retentionDaysString Days' created successfully." "SUCCESS"
+                if (-not (Get-RetentionPolicyTag -Identity "Deleted Items $retentionDays Days" -ErrorAction SilentlyContinue)) {
+                    New-RetentionPolicyTag -Name "Deleted Items $retentionDays Days" -RetentionAction PermanentlyDelete -AgeLimitForRetention $retentionDays -Type DeletedItems
+                    Log-Message "Retention policy tag 'Deleted Items $retentionDays Days' created successfully." "SUCCESS"
                 }
                 else {
-                    Log-Message "Retention policy tag 'Deleted Items $retentionDaysString Days' already exists." "INFO"
+                    Log-Message "Retention policy tag 'Deleted Items $retentionDays Days' already exists." "INFO"
                 }
-                if (-not (Get-RetentionPolicy -Name "Deleted Items Retention Policy" -ErrorAction SilentlyContinue)) {
-                    New-RetentionPolicy -Name "Deleted Items Retention Policy" -RetentionPolicyTagLinks "Deleted Items $retentionDaysString Days"
+                if (-not (Get-RetentionPolicy -Identity "Deleted Items Retention Policy" -ErrorAction SilentlyContinue)) {
+                    New-RetentionPolicy -Name "Deleted Items Retention Policy" -RetentionPolicyTagLinks "Deleted Items $retentionDays Days"
                     Log-Message "Retention policy 'Deleted Items Retention Policy' created successfully." "SUCCESS"
                 }
                 else {
@@ -183,17 +205,19 @@ function Set-ServiceConfig {
                     foreach ($group in $Config.AzureAD.GroupCreation.CreateSecurityGroups.Groups) {
                         New-AzureADGroup -DisplayName $group -MailEnabled $false -SecurityEnabled $true
                     }
-                } else {
+                }
+                else {
                     Log-Message "Skipping creation of non-mail security groups as per configuration." "INFO"
                 }
             } 
         },
-        @{ Name = "Create Mail-Enabled Security Groups";  Action = { 
+        @{ Name = "Create Mail-Enabled Security Groups"; Action = { 
                 if ($Config.AzureAD.GroupCreation.CreateMailEnabledSecurityGroups.Enabled -eq $true) {
                     foreach ($group in $Config.AzureAD.GroupCreation.CreateMailEnabledSecurityGroups.Groups) {
                         New-DistributionGroup -Name $group
                     }
-                } else {
+                }
+                else {
                     Log-Message "Skipping creation of mail-enabled security groups as per configuration." "INFO"
                 }
             } 
@@ -234,7 +258,8 @@ function Set-ServiceConfig {
                         Set-Mailbox -Identity $adminUser -ForwardingAddress $Config.Exchange.ForwardAdminMails.To -DeliverToMailboxAndForward $true
                         Set-MailboxJunkEmailConfiguration -Identity $adminUser -Enabled $true
                     }
-                } else {
+                }
+                else {
                     Write-Host "Email forwarding for Global Admin is disabled in the configuration."
                 }
             }
@@ -258,7 +283,7 @@ function Set-ServiceConfig {
         
                     if (-not $policy) {
                         $conditions = @{
-                            Users = @{
+                            Users        = @{
                                 IncludeGroups = @($group.Id)
                             }
                             Applications = @{
