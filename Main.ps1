@@ -31,26 +31,28 @@ function Log-Message {
 }
 
 Log-Message "Starting tenant configuration script." "INFO"
-Write-Host "/========================================================================\"
-Write-Host "|| __  __ _____  __  ____    _____ _____ _   _    _    _   _ _____      ||"
-Write-Host "|||  \/  |___ / / /_| ___|  |_   _| ____| \ | |  / \  | \ | |_   _|     ||"
-Write-Host "||| |\/| | |_ \| '_ \___ \    | | |  _| |  \| | / _ \ |  \| | | |       ||"
-Write-Host "||| |  | |___) | (_) |__) |   | | | |___| |\  |/ ___ \| |\  | | |       ||"
-Write-Host "|||_|  |_|____/ \___/____/    |_| |_____| | \_/_/   \_\_| \_| |_|       ||"
-Write-Host "||  ____ ___  _   _ _____ ___ ____ _   _ ____      _  _____ ___  ____   ||"
-Write-Host "|| / ___/ _ \| \ | |  ___|_ _/ ___| | | |  _ \    / \|_   _/ _ \|  _ \  ||"
-Write-Host "||| |  | | | |  \| | |_   | | |  _| | | | |_) |  / _ \ | || | | | |_) | ||"
-Write-Host "||| |__| |_| | |\  |  _|  | | |_| | |_| |  _ <  / ___ \| || |_| |  _ <  ||"
-Write-Host "|| \____\___/|_| \_|_|   |___\____|\___/|_| \_\/_/   \_\_| \___/|_| \_\ ||"
-Write-Host "||                                                                      ||"
-Write-Host "||                       Script by: El3ctr1cR                           ||"
-Write-Host "||                GitHub: https://github.com/El3ctr1cR/                 ||"
-Write-Host "\========================================================================/"
+Write-Host "/========================================================================\" -ForegroundColor Magenta
+Write-Host "|| __  __ _____  __  ____    _____ _____ _   _    _    _   _ _____      ||" -ForegroundColor Magenta
+Write-Host "|||  \/  |___ / / /_| ___|  |_   _| ____| \ | |  / \  | \ | |_   _|     ||" -ForegroundColor Magenta
+Write-Host "||| |\/| | |_ \| '_ \___ \    | | |  _| |  \| | / _ \ |  \| | | |       ||" -ForegroundColor Magenta
+Write-Host "||| |  | |___) | (_) |__) |   | | | |___| |\  |/ ___ \| |\  | | |       ||" -ForegroundColor Magenta
+Write-Host "|||_|  |_|____/ \___/____/    |_| |_____| | \_/_/   \_\_| \_| |_|       ||" -ForegroundColor Magenta
+Write-Host "||  ____ ___  _   _ _____ ___ ____ _   _ ____      _  _____ ___  ____   ||" -ForegroundColor Magenta
+Write-Host "|| / ___/ _ \| \ | |  ___|_ _/ ___| | | |  _ \    / \|_   _/ _ \|  _ \  ||" -ForegroundColor Magenta
+Write-Host "||| |  | | | |  \| | |_   | | |  _| | | | |_) |  / _ \ | || | | | |_) | ||" -ForegroundColor Magenta
+Write-Host "||| |__| |_| | |\  |  _|  | | |_| | |_| |  _ <  / ___ \| || |_| |  _ <  ||" -ForegroundColor Magenta
+Write-Host "|| \____\___/|_| \_|_|   |___\____|\___/|_| \_\/_/   \_\_| \___/|_| \_\ ||" -ForegroundColor Magenta
+Write-Host "||                                                                      ||" -ForegroundColor Magenta
+Write-Host "||                       Script by: El3ctr1cR                           ||" -ForegroundColor Magenta
+Write-Host "||                GitHub: https://github.com/El3ctr1cR/                 ||" -ForegroundColor Magenta
+Write-Host "\========================================================================/" -ForegroundColor Magenta
 
-Log-Message "IMPORTANT WARNING: These changes cannot be reverted automatically unless there is a back-up!" "WARNING"
+Write-Host " "
+Write-Host "IMPORTANT WARNING: These changes cannot be reverted automatically unless there is a back-up!" -ForegroundColor DarkRed
+Write-Host " "
 $confirmation = Read-Host "Have you set the config.yaml file correctly? (Y/N)"
 if ($confirmation -ne "Y") {
-    Log-Message "Configuration not confirmed. Exiting script." "WARNING"
+    Log-Message "Configuration not confirmed. Exiting script." "ERROR"
     exit 1
 }
 

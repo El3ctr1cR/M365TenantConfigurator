@@ -39,9 +39,9 @@ Exchange:
 
 AzureAD:
   EnforceSecurityDefaults: true
-  BreakGlassAdmin: "MSPNameBG"
-  BreakGlassAdminEmail: "MSPNameBG@domain.com"
-  BreakGlassPassword: "Password!23"
+  BreakGlassAdmin: "MSPNameBG5"
+  BreakGlassAdminEmail: "MSPNameBG5@rubysoft456.onmicrosoft.com"
+  BreakGlassPassword: "JKDicbaw764@$%awkiufJF"
   DeleteStaleDevices: true
   GroupCreation:
     CreateSecurityGroups:
@@ -55,10 +55,6 @@ AzureAD:
       Groups:
         - "MailGroup1"
         - "MailGroup2"
-
-Global:
-  Credential:
-    UserName: "admin@domain.com"
 
 MSOL:
   RegionalSettings:

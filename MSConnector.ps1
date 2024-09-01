@@ -8,25 +8,25 @@ function Connect-TenantAdmin {
             [string]$ModuleName
         )
 
-        Write-Host "Checking for module $ModuleName..." -ForegroundColor Yellow
+        Log-Message "Checking for module $ModuleName..." "INFO"
 
         if (-not (Get-Module -ListAvailable -Name $ModuleName)) {
             try {
                 Install-Module -Name $ModuleName -Force -AllowClobber -Scope CurrentUser
-                Write-Host "$ModuleName module installed successfully." -ForegroundColor Green
+                Log-Message "$ModuleName module installed successfully." "SUCCESS"
             }
             catch {
-                Write-Host "Failed to install $ModuleName module: $_" -ForegroundColor Red
+                Log-Message "Failed to install $ModuleName module: $_" "ERROR"
                 exit 1
             }
         }
 
         try {
-            Write-Host "Importing module $ModuleName..." -ForegroundColor Yellow
+            Log-Message "Importing module $ModuleName..." "INFO"
             Import-Module $ModuleName -Force
         }
         catch {
-            Write-Host "Failed to import $ModuleName module: $_" -ForegroundColor Red
+            Log-Message "Failed to import $ModuleName module: $_" "ERROR"
             exit 1
         }
     }
@@ -44,36 +44,31 @@ function Connect-TenantAdmin {
         $nugetExePath = Join-Path $libsDir "nuget.exe"
         $azureCoreDir = Join-Path $libsDir "Azure.Core.1.39.0"
 
-        # Ensure the libs directory exists
         if (-not (Test-Path -Path $libsDir)) {
             New-Item -Path $libsDir -ItemType Directory | Out-Null
         }
 
-        # Download nuget.exe if it doesn't exist
         if (-not (Test-Path -Path $nugetExePath)) {
-            Write-Host "Downloading NuGet CLI..." -ForegroundColor Yellow
+            Log-Message "Downloading NuGet CLI..." "INFO"
             Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nugetExePath
-            Write-Host "NuGet CLI downloaded successfully." -ForegroundColor Green
+            Log-Message "NuGet CLI downloaded successfully." "SUCCESS"
         }
 
-        # Clear NuGet cache
-        Write-Host "Clearing NuGet cache..." -ForegroundColor Yellow
+        Log-Message "Clearing NuGet cache..." "INFO"
         & $nugetExePath locals all -clear
 
-        # Install Azure.Core dependency
-        Write-Host "Installing Azure.Core dependency..." -ForegroundColor Yellow
+        Log-Message "Installing Azure.Core dependency..." "INFO"
         & $nugetExePath install Azure.Core -Version 1.39.0 -OutputDirectory $libsDir
 
-        Write-Host "Azure.Core dependency installed successfully." -ForegroundColor Green
+        Log-Message "Azure.Core dependency installed successfully." "SUCCESS"
 
-        # Load the Azure.Core assembly
         $dllPath = Join-Path $azureCoreDir "lib/net472/Azure.Core.dll"
         if (Test-Path -Path $dllPath) {
             [System.Reflection.Assembly]::LoadFrom($dllPath)
-            Write-Host "Azure.Core assembly loaded successfully." -ForegroundColor Green
+            Log-Message "Azure.Core assembly loaded successfully." "SUCCESS"
         }
         else {
-            Write-Host "Azure.Core assembly could not be found." -ForegroundColor Red
+            Log-Message "Azure.Core assembly could not be found." "ERROR"
             exit 1
         }
     }
@@ -87,7 +82,7 @@ function Connect-TenantAdmin {
             Install-AzureCoreDependency
         }
         else {
-            Write-Host "Azure.Core dependency already installed." -ForegroundColor Green
+            Log-Message "Azure.Core dependency already installed." "SUCCESS"
         }
     }
 
@@ -96,11 +91,13 @@ function Connect-TenantAdmin {
     Remove-Module -Name ExchangeOnlineManagement -Force -ErrorAction SilentlyContinue
 
     InstallAndImportModule "Microsoft.Graph.Authentication"
+    InstallAndImportModule "Microsoft.Graph.Identity.SignIns"
 
     InstallAndImportModule "ExchangeOnlineManagement"
     InstallAndImportModule "AzureAD"
     InstallAndImportModule "MSOnline"
     InstallAndImportModule "MicrosoftTeams"
+    InstallAndImportModule "AIPService"
 
     $graphModules = @(
         "Microsoft.Graph.Identity.SignIns"
@@ -109,7 +106,6 @@ function Connect-TenantAdmin {
         "Microsoft.Graph.Compliance"
         "Microsoft.Graph.Users"
         "Microsoft.Graph.Groups"
-        "Microsoft.Graph.Authentication"
         "Microsoft.Graph.Security"
     )
 
@@ -120,68 +116,78 @@ function Connect-TenantAdmin {
     $global:SharePointAdminUrl = Read-Host -Prompt "Please enter your SharePoint Online Admin URL (e.g., https://<tenant>-admin.sharepoint.com)"
 
     try {
-        Write-Host "Attempting to connect to Exchange Online..." -ForegroundColor Yellow
+        Log-Message "Attempting to connect to Exchange Online..." "INFO"
         Connect-ExchangeOnline -ShowProgress:$false
-        Write-Host "Connected to Exchange Online successfully." -ForegroundColor Green
+        Log-Message "Connected to Exchange Online successfully." "SUCCESS"
     }
     catch {
-        Write-Host "Failed to connect to Exchange Online: $_" -ForegroundColor Red
+        Log-Message "Failed to connect to Exchange Online: $_" "ERROR"
         exit 1
     }
 
     try {
-        Write-Host "Connecting to Azure AD..." -ForegroundColor Yellow
+        Log-Message "Connecting to Azure AD..." "INFO"
         Connect-AzureAD
-        Write-Host "Connected to Azure AD successfully." -ForegroundColor Green
+        Log-Message "Connected to Azure AD successfully." "SUCCESS"
     }
     catch {
-        Write-Host "Failed to connect to Azure AD: $_" -ForegroundColor Red
+        Log-Message "Failed to connect to Azure AD: $_" "ERROR"
         exit 1
     }
 
     try {
-        Write-Host "Connecting to MSOnline..." -ForegroundColor Yellow
+        Log-Message "Connecting to MSOnline..." "INFO"
         Connect-MsolService
-        Write-Host "Connected to MSOnline successfully." -ForegroundColor Green
+        Log-Message "Connected to MSOnline successfully." "SUCCESS"
     }
     catch {
-        Write-Host "Failed to connect to MSOnline: $_" -ForegroundColor Red
+        Log-Message "Failed to connect to MSOnline: $_" "ERROR"
         exit 1
     }
 
     try {
-        Write-Host "Connecting to Microsoft Teams..." -ForegroundColor Yellow
+        Log-Message "Connecting to Microsoft Teams..." "INFO"
         Connect-MicrosoftTeams
-        Write-Host "Connected to Microsoft Teams successfully." -ForegroundColor Green
+        Log-Message "Connected to Microsoft Teams successfully." "SUCCESS"
     }
     catch {
-        Write-Host "Failed to connect to Microsoft Teams: $_" -ForegroundColor Red
+        Log-Message "Failed to connect to Microsoft Teams: $_" "ERROR"
         exit 1
     }
 
     try {
-        Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
+        Log-Message "Connecting to AIPService..." "INFO"
+        Connect-AipService
+        Log-Message "Connected to AIPService successfully." "SUCCESS"
+    }
+    catch {
+        Log-Message "Failed to connect to AIPService: $_" "ERROR"
+        exit 1
+    }
+
+    try {
+        Log-Message "Connecting to Microsoft Graph..." "INFO"
         Connect-MgGraph -Scopes `
             "User.ReadWrite.All", "Group.ReadWrite.All", "Directory.ReadWrite.All", `
             "Organization.ReadWrite.All", "Device.ReadWrite.All", "DeviceManagementConfiguration.ReadWrite.All", `
             "SecurityEvents.ReadWrite.All", "MailboxSettings.ReadWrite", "Reports.Read.All", `
             "AuditLog.Read.All", "RoleManagement.ReadWrite.Directory", "Application.ReadWrite.All", `
             "TeamSettings.ReadWrite.All", "Sites.FullControl.All", "IdentityRiskyUser.ReadWrite.All", `
-            "ThreatAssessment.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All"
-        Write-Host "Connected to Microsoft Graph successfully." -ForegroundColor Green
+            "ThreatAssessment.ReadWrite.All", "Policy.ReadWrite.ConditionalAccess", "Calendars.ReadWrite.Shared"
+        Log-Message "Connected to Microsoft Graph successfully." "SUCCESS"
     }
     catch {
-        Write-Host "Failed to connect to Microsoft Graph: $_" -ForegroundColor Red
+        Log-Message "Failed to connect to Microsoft Graph: $_" "ERROR"
         exit 1
     }
 
     try {
-        Write-Host "Connecting to SharePoint Online..." -ForegroundColor Yellow
+        Log-Message "Connecting to SharePoint Online..." "INFO"
         Connect-SPOService -Url $global:SharePointAdminUrl
-        Write-Host "Connected to SharePoint Online successfully." -ForegroundColor Green
+        Log-Message "Connected to SharePoint Online successfully." "SUCCESS"
     }
     catch {
-        Write-Host "Failed to connect to SharePoint Online: $_" -ForegroundColor Red
+        Log-Message "Failed to connect to SharePoint Online: $_" "ERROR"
         exit 1
     }
 }

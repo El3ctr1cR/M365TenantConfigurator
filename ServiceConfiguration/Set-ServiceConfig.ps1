@@ -67,16 +67,17 @@ function Set-ServiceConfig {
                 }
             } 
         },
-        #needs fixing@{ Name = "Enable AIP Service"; Action = { 
-        #needs fixing        $aipServiceStatus = Get-AipServiceStatus
-        #needs fixing        if ($aipServiceStatus.IsEnabled -eq $false) {
-        #needs fixing            Enable-AipService
-        #needs fixing            Log-Message "AIP Service enabled successfully." "SUCCESS"
-        #needs fixing        } else {
-        #needs fixing            Log-Message "AIP Service is already enabled." "INFO"
-        #needs fixing        }
-        #needs fixing    } 
-        #needs fixing},        
+        @{ Name = "Enable AIP Service"; Action = { 
+                $aipServiceStatus = Get-AipService
+                if ($aipServiceStatus.IsEnabled -eq $false) {
+                    Enable-AipService
+                    Log-Message "AIP Service enabled successfully." "SUCCESS"
+                }
+                else {
+                    Log-Message "AIP Service is already enabled." "INFO"
+                }
+            } 
+        },        
         @{ Name = "Enable Send-from-Alias"; Action = { 
                 Set-OrganizationConfig -SendFromAliasEnabled (ConvertTo-Boolean $Config.Exchange.SendFromAlias) 
             } 
@@ -186,13 +187,15 @@ function Set-ServiceConfig {
             } 
         },
         @{ Name = "Create Break-Glass Account"; Action = { 
+                $passwordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
+                $passwordProfile.Password = (ConvertTo-SecureString -String $Config.AzureAD.BreakGlassPassword -AsPlainText -Force)
                 New-AzureADUser -AccountEnabled $true -DisplayName $Config.AzureAD.BreakGlassAdmin -MailNickName $Config.AzureAD.BreakGlassAdmin `
-                    -UserPrincipalName "$($Config.AzureAD.BreakGlassAdminEmail)" -PasswordProfile (New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile `
-                        -ArgumentList ($true, (ConvertTo-SecureString -String $Config.AzureAD.BreakGlassPassword -AsPlainText -Force)))
-                Add-AzureADDirectoryRoleMember -ObjectId (Get-AzureADDirectoryRole -Filter "displayName eq 'Global Administrator'").ObjectId `
-                    -RefObjectId (Get-AzureADUser -Filter "UserPrincipalName eq '$($Config.AzureAD.BreakGlassAdminEmail)'").ObjectId
-            } 
-        },
+                    -UserPrincipalName "$($Config.AzureAD.BreakGlassAdminEmail)" -PasswordProfile $passwordProfile
+                $roleId = (Get-AzureADDirectoryRole -Filter "displayName eq 'Global Administrator'").ObjectId
+                $userId = (Get-AzureADUser -Filter "UserPrincipalName eq '$($Config.AzureAD.BreakGlassAdminEmail)'").ObjectId
+                Add-AzureADDirectoryRoleMember -ObjectId $roleId -RefObjectId $userId
+            }
+        }
         @{ Name = "Delete Old Devices (If Configured)"; Action = { 
                 if (ConvertTo-Boolean $Config.AzureAD.DeleteStaleDevices) {
                     Get-AzureADDevice -All $true | Where-Object { $_.ApproximateLastSignInDate -lt (Get-Date).AddMonths(-3) } | `
@@ -222,36 +225,18 @@ function Set-ServiceConfig {
                 }
             } 
         },
-               
-        @{ Name = "Add Admin Users to Groups"; Action = { 
-                foreach ($group in $Config.AzureAD.SecurityGroups) {
-                    Add-AzureADGroupMember -ObjectId (Get-AzureADGroup -Filter "DisplayName eq '$group'").ObjectId -RefObjectId $Config.AzureAD.BreakGlassAdmin
-                    Add-DistributionGroupMember -Identity $group -Member $Config.AzureAD.BreakGlassAdmin
-                }
-            } 
-        },
-        @{ Name = "Grant Admin Access to All Mailboxes"; Action = {
-                $mailboxPlans = Get-MailboxPlan
-                foreach ($plan in $mailboxPlans) {
-                    Write-Host "Processing mailbox plan: $($plan.DisplayName)"
-                    $mailboxes = Get-Mailbox -MailboxPlan $plan.Identity
-                    foreach ($mailbox in $mailboxes) {
-                        foreach ($adminUser in $adminUsers) {
-                            Add-MailboxPermission -Identity $mailbox.UserPrincipalName -User $adminUser -AccessRights FullAccess -InheritanceType All -AutoMapping $false
-                        }
-                    }
-                    foreach ($adminUser in $adminUsers) {
-                        Set-MailboxPlan -Identity $plan.Identity -GrantSendOnBehalfTo $adminUser
-                    }
-                }
-            }
-        },
         @{ Name = "Hide Admin Users from GAL"; Action = {
                 foreach ($adminUser in $adminUsers) {
-                    Set-Mailbox -Identity $adminUser -HiddenFromAddressListsEnabled $true
+                    if ($adminUser) {
+                        Set-Mailbox -Identity $adminUser -HiddenFromAddressListsEnabled $true
+                        Log-Message "Successfully hid $adminUser from the Global Address List." "SUCCESS"
+                    }
+                    else {
+                        Log-Message "Skipped an empty or null admin user entry." "WARNING"
+                    }
                 }
             }
-        },
+        }        
         @{ Name = "Set Up Email Forwarding for Global Admin"; Action = {
                 if ($Config.Exchange.ForwardAdminMails.Enabled -eq $true) {
                     foreach ($adminUser in $adminUsers) {
@@ -264,57 +249,56 @@ function Set-ServiceConfig {
                 }
             }
         }
-        @{ Name = "Disable Shared Mailbox Logon"; Action = {
+        @{
+            Name   = "Disable Shared Mailbox Logon"
+            Action = {
                 if ($Config.Exchange.BlockSharedMailboxLogon -eq $true) {
-                    Select-MgProfile -Name "beta"
+                    $membershipRule = '(user.mailNickname -ne null) -and (user.userType -eq "Member") -and (user.mail -ne null) -and (user.userPrincipalName -contains "@") -and (user.assignedPlans -all (assignedPlan.servicePlanId -eq null))'
         
-                    $groupName = "Shared Mailboxes"
-                    $dynamicRule = "(user.mailNickname -ne null) and (user.mailEnabled -eq true) and (user.userType -eq 'Member')"
+                    # Create the dynamic group
+                    $group = New-MgGroup -DisplayName "Blocked Shared Mailboxes" `
+                        -MailEnabled:$false `
+                        -MailNickname "BlockedSharedMailboxes" `
+                        -SecurityEnabled:$true `
+                        -GroupTypes @("DynamicMembership") `
+                        -MembershipRule $membershipRule `
+                        -MembershipRuleProcessingState "On"
         
-                    $group = Get-MgGroup -Filter "displayName eq '$groupName'"
+                    Log-Message "Dynamic Group Created: $($group.DisplayName)" "INFO"
+                    Log-Message "Starting sleep for 30 seconds to ensure the group is fully created and populated." "INFO"
+                    Start-Sleep -Seconds 30
+                    Log-Message "Continuing..." "INFO"
         
-                    if (-not $group) {
-                        $group = New-MgGroup -DisplayName $groupName -MailEnabled $false -SecurityEnabled $true `
-                            -GroupTypes @("DynamicMembership") -MembershipRule $dynamicRule -MembershipRuleProcessingState "On"
+                    # Get the Group ID of the dynamic group
+                    $groupId = $group.Id
+        
+                    # Define the policy
+                    $policy = @{
+                        displayName     = "Block Sign-In for Shared Mailboxes"
+                        state           = "enabled"
+                        conditions      = @{
+                            users = @{
+                                includeGroups = @($groupId)
+                            }
+                        }
+                        grantControls   = @{
+                            operator        = "OR"
+                            builtInControls = @("block")
+                        }
+                        sessionControls = @{}
+                        scope           = @{
+                            include = "all"
+                        }
                     }
         
-                    $policyName = "Block Sign-ins for Shared Mailboxes"
-                    $policy = Get-MgConditionalAccessPolicy -Filter "displayName eq '$policyName'"
+                    # Create the Conditional Access Policy
+                    Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies' -Body ($policy | ConvertTo-Json -Depth 5)
         
-                    if (-not $policy) {
-                        $conditions = @{
-                            Users        = @{
-                                IncludeGroups = @($group.Id)
-                            }
-                            Applications = @{
-                                IncludeApplications = @("*")
-                            }
-                        }
-        
-                        $grantControls = @{
-                            Operator        = "OR"
-                            BuiltInControls = @("Block")
-                        }
-        
-                        $sessionControl = @{
-                            SignInFrequency = @{
-                                Value = "Everytime"
-                            }
-                        }
-        
-                        $newPolicy = @{
-                            DisplayName     = $policyName
-                            State           = "enabled"
-                            Conditions      = $conditions
-                            GrantControls   = $grantControls
-                            SessionControls = $sessionControl
-                        }
-        
-                        New-MgConditionalAccessPolicy -BodyParameter $newPolicy
-                    }
+                    Log-Message "Conditional Access Policy Created" "INFO"
                 }
             }
         }
+        
         @{ Name = "Set Regional Settings for All Mailboxes"; Action = { 
                 Get-Mailbox -ResultSize Unlimited | ForEach-Object { 
                     Set-MailboxRegionalConfiguration -Identity $_.UserPrincipalName -Language $Config.MSOL.RegionalSettings.Language `
@@ -368,6 +352,7 @@ function Set-ServiceConfig {
 
     foreach ($task in $tasks) {
         try {
+            Log-Message "Applying $($task.Name)..." "INFO"
             & $task.Action
             Log-Message "$($task.Name) configuration applied successfully." "SUCCESS"
         }
