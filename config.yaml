@@ -1,0 +1,78 @@
+Exchange:
+  SendFromAlias: true
+  FocusedInbox: false
+  DistributionGroupNamingPolicy: "DL_<GroupName>"
+  PlusAddressing: true
+  MailTipsAllTipsEnabled: true
+  MailTipsExternalRecipientsTipsEnabled: false
+  MailTipsGroupMetricsEnabled: true
+  MailTipsMailboxSourcedTipsEnabled: true
+  MailTipsLargeAudienceThreshold: 10
+  ReadTracking: true
+  PublicComputerDetection: true
+  OutlookPay: false
+  LeanPopout: true
+  OutlookEventsRecognition: true
+  LocalEventsEnabled: true
+  FeedbackEnabled: false
+  UserVoiceEnabled: false
+  ModernAuthentication: true
+  BlockConsumerStorageOWA: true
+  ConditionalAccessPolicy: "ReadOnly"
+  RetentionLimitDeletedItems: "30"
+  UnifiedAuditLogSearch: true
+  AuditLogAgeLimit: "90.00:00:00"
+  ExternalSenderTags: true
+  ExternalSenderAllowList:
+    - "admin1@domain.com"
+    - "admin2@domain.com"
+  HideAdminFromGAL: true
+  ForwardAdminMails:
+    Enabled: false
+    To: "forward@domain.com"
+  DeliverToMailboxAndForward: true
+  JunkEmailEnabled: false
+  SharedMailboxUser: "shared@domain.com"
+  BlockSharedMailboxLogon: true
+  AutoExpandingArchive: true
+  LitigationHoldEnabled: true
+
+AzureAD:
+  EnforceSecurityDefaults: true
+  BreakGlassAdmin: "MSPNameBG"
+  BreakGlassAdminEmail: "MSPNameBG@domain.com"
+  BreakGlassPassword: "Password!23"
+  DeleteStaleDevices: true
+  GroupCreation:
+    CreateSecurityGroups:
+      Enabled: false
+      Groups:
+        - "Group1"
+        - "Group2"
+        - "Group3"
+    CreateMailEnabledSecurityGroups:
+      Enabled: false
+      Groups:
+        - "MailGroup1"
+        - "MailGroup2"
+
+Global:
+  Credential:
+    UserName: "admin@domain.com"
+
+MSOL:
+  RegionalSettings:
+    Language: "en-US"
+    TimeZone: "Pacific Standard Time"
+
+Teams:
+  DefaultTeamSettings:
+    AllowGuestAccess: false
+    AllowExternalAccess: false
+    AllowOrgWideTeamCreation: false
+  DisableAnonymousJoin: true
+
+SharePointOneDrive:
+  DefaultStorageLimit: 7000
+  SharingCapability: "ExternalUserAndGuestSharing"
+  BccExternalSharingInvitations: false
