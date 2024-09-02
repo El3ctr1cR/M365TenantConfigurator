@@ -38,10 +38,12 @@ Exchange:
   LitigationHoldEnabled: true
 
 AzureAD:
-  EnforceSecurityDefaults: true
-  BreakGlassAdmin: "MSPNameBG5"
-  BreakGlassAdminEmail: "MSPNameBG5@rubysoft456.onmicrosoft.com"
-  BreakGlassPassword: "JKDicbaw764@$%awkiufJF"
+  EnforceSecurityDefaults: false
+  CreateBreakGlassAdmin:
+    Enabled: false
+    DisplayName: "MSPNameBG5"
+    UPN: "MSPNameBG5@rubysoft456.onmicrosoft.com"
+    Password: "ndIWABDUI7384362@$!"
   DeleteStaleDevices: true
   GroupCreation:
     CreateSecurityGroups:

@@ -186,16 +186,32 @@ function Set-ServiceConfig {
                 #needs fixingUpdate-MgPolicyIdentitySecurityDefaultEnforcementPolicy -BodyParameter $params 
             } 
         },
-        @{ Name = "Create Break-Glass Account"; Action = { 
-                $passwordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
-                $passwordProfile.Password = (ConvertTo-SecureString -String $Config.AzureAD.BreakGlassPassword -AsPlainText -Force)
-                New-AzureADUser -AccountEnabled $true -DisplayName $Config.AzureAD.BreakGlassAdmin -MailNickName $Config.AzureAD.BreakGlassAdmin `
-                    -UserPrincipalName "$($Config.AzureAD.BreakGlassAdminEmail)" -PasswordProfile $passwordProfile
-                $roleId = (Get-AzureADDirectoryRole -Filter "displayName eq 'Global Administrator'").ObjectId
-                $userId = (Get-AzureADUser -Filter "UserPrincipalName eq '$($Config.AzureAD.BreakGlassAdminEmail)'").ObjectId
-                Add-AzureADDirectoryRoleMember -ObjectId $roleId -RefObjectId $userId
+        @{ Name = "Create Break-Glass Account"; Action = {
+            if ($Config.AzureAD.CreateBreakGlassAdmin.Enabled -eq $true) {
+                $existingUser = Get-AzureADUser -Filter "UserPrincipalName eq '$($Config.AzureAD.CreateBreakGlassAdmin.UPN)'"
+        
+                if (-not $existingUser) {
+                    $passwordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
+                    $passwordProfile.Password = (ConvertTo-SecureString -String $Config.AzureAD.CreateBreakGlassAdmin.Password -AsPlainText -Force)
+                    
+                    New-AzureADUser -AccountEnabled $true -DisplayName $Config.AzureAD.CreateBreakGlassAdmin.DisplayName -MailNickName $Config.AzureAD.BreakGlassAdmin `
+                        -UserPrincipalName "$($Config.AzureAD.CreateBreakGlassAdmin.UPN)" -PasswordProfile $passwordProfile
+                    
+                    $roleId = (Get-AzureADDirectoryRole -Filter "displayName eq 'Global Administrator'").ObjectId
+                    $userId = (Get-AzureADUser -Filter "UserPrincipalName eq '$($Config.AzureAD.CreateBreakGlassAdmin.UPN)'").ObjectId
+                    
+                    Add-AzureADDirectoryRoleMember -ObjectId $roleId -RefObjectId $userId
+                    
+                    Log-Message "Break-Glass account '$($Config.AzureAD.CreateBreakGlassAdmin.UPN)' created and added to Global Administrator role." "INFO"
+                }
+                else {
+                    Log-Message "Break-Glass account '$($Config.AzureAD.CreateBreakGlassAdmin.UPN)' already exists. Skipping creation." "INFO"
+                }
             }
-        }
+            else {
+                Log-Message "Creation of Break-Glass account is disabled in the configuration. Skipping..." "INFO"
+            }
+        }}
         @{ Name = "Delete Old Devices (If Configured)"; Action = { 
                 if (ConvertTo-Boolean $Config.AzureAD.DeleteStaleDevices) {
                     Get-AzureADDevice -All $true | Where-Object { $_.ApproximateLastSignInDate -lt (Get-Date).AddMonths(-3) } | `
@@ -252,50 +268,50 @@ function Set-ServiceConfig {
         @{
             Name   = "Disable Shared Mailbox Logon"
             Action = {
-                if ($Config.Exchange.BlockSharedMailboxLogon -eq $true) {
-                    $membershipRule = '(user.mailNickname -ne null) -and (user.userType -eq "Member") -and (user.mail -ne null) -and (user.userPrincipalName -contains "@") -and (user.assignedPlans -all (assignedPlan.servicePlanId -eq null))'
+            if ($Config.Exchange.BlockSharedMailboxLogon -eq $true) {
+                $membershipRule = '(user.mailNickname -ne null) -and (user.userType -eq "Member") -and (user.mail -ne null) -and (user.userPrincipalName -contains "@") -and (user.assignedPlans -all (assignedPlan.servicePlanId -eq null))'
         
-                    # Create the dynamic group
-                    $group = New-MgGroup -DisplayName "Blocked Shared Mailboxes" `
-                        -MailEnabled:$false `
-                        -MailNickname "BlockedSharedMailboxes" `
-                        -SecurityEnabled:$true `
-                        -GroupTypes @("DynamicMembership") `
-                        -MembershipRule $membershipRule `
-                        -MembershipRuleProcessingState "On"
+                # Create the dynamic group
+                $group = New-MgGroup -DisplayName "Blocked Shared Mailboxes" `
+                    -MailEnabled:$false `
+                    -MailNickname "BlockedSharedMailboxes" `
+                    -SecurityEnabled:$true `
+                    -GroupTypes @("DynamicMembership") `
+                    -MembershipRule $membershipRule `
+                    -MembershipRuleProcessingState "On"
         
-                    Log-Message "Dynamic Group Created: $($group.DisplayName)" "INFO"
+                Log-Message "Dynamic Group Created: $($group.DisplayName)" "INFO"
                     Log-Message "Starting sleep for 30 seconds to ensure the group is fully created and populated." "INFO"
                     Start-Sleep -Seconds 30
-                    Log-Message "Continuing..." "INFO"
+                Log-Message "Continuing..." "INFO"
         
-                    # Get the Group ID of the dynamic group
-                    $groupId = $group.Id
+                # Get the Group ID of the dynamic group
+                $groupId = $group.Id
         
-                    # Define the policy
-                    $policy = @{
-                        displayName     = "Block Sign-In for Shared Mailboxes"
-                        state           = "enabled"
-                        conditions      = @{
-                            users = @{
-                                includeGroups = @($groupId)
-                            }
+                # Define the policy
+                $policy = @{
+                    displayName     = "Block Sign-In for Shared Mailboxes"
+                    state           = "enabled"
+                    conditions      = @{
+                        users = @{
+                            includeGroups = @($groupId)
                         }
-                        grantControls   = @{
-                            operator        = "OR"
-                            builtInControls = @("block")
-                        }
-                        sessionControls = @{}
+                    }
+                    grantControls   = @{
+                        operator        = "OR"
+                        builtInControls = @("block")
+                    }
+                    sessionControls = @{}
                         scope           = @{
                             include = "all"
                         }
-                    }
-        
-                    # Create the Conditional Access Policy
-                    Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies' -Body ($policy | ConvertTo-Json -Depth 5)
-        
-                    Log-Message "Conditional Access Policy Created" "INFO"
                 }
+        
+                # Create the Conditional Access Policy
+                Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies' -Body ($policy | ConvertTo-Json -Depth 5)
+        
+                Log-Message "Conditional Access Policy Created" "INFO"
+            }
             }
         }
         

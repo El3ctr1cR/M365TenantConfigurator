@@ -173,7 +173,7 @@ function Connect-TenantAdmin {
             "SecurityEvents.ReadWrite.All", "MailboxSettings.ReadWrite", "Reports.Read.All", `
             "AuditLog.Read.All", "RoleManagement.ReadWrite.Directory", "Application.ReadWrite.All", `
             "TeamSettings.ReadWrite.All", "Sites.FullControl.All", "IdentityRiskyUser.ReadWrite.All", `
-            "ThreatAssessment.ReadWrite.All", "Policy.ReadWrite.ConditionalAccess", "Calendars.ReadWrite.Shared"
+            "ThreatAssessment.ReadWrite.All", "Policy.ReadWrite.ConditionalAccess", "Application.Read.All", "Policy.Read.All"
         Log-Message "Connected to Microsoft Graph successfully." "SUCCESS"
     }
     catch {
